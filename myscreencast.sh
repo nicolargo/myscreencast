@@ -7,11 +7,12 @@
 # * gstreamer
 # * istanbul
 # * oggvideotools
+# * ffmpeg
 #
 # Auteur: Nicolas Hennion aka Nicolargo
 # GPL v3
 # 
-VERSION="0.1"
+VERSION="0.2"
 
 ### Variables
 WEBCAM="/dev/video1"
@@ -25,10 +26,14 @@ SOURCEHEIGHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\2/p'`
 OUTPUTWIDTH=$(echo "$SOURCEWIDHT * $OUTPUTHEIGHT / $SOURCEHEIGHT" | bc)
 
 encode() {
-  echo "ENCODAGE EN COURS"
+  echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.ogg"
   gst-launch filesrc location=screencast.yuv ! videoparse format=3 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 ! ffmpegcolorspace ! theoraenc ! oggmux ! filesink location=screencast.ogv 2>&1 >>/dev/null
-  echo "ECRITURE DU FICHIER: screencast-$DATE.ogg"
   oggJoin screencast-$DATE.ogg screencast.ogv screencast.oga
+
+  echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.mp4"
+  # Quand x264 supportera conteneur mp4, encoder à partir de yuv avec x264
+  ffmpeg -i screencast-$DATE.ogg -vcodec libx264 -vpre hq -crf 20 -acodec aac -f mp4 -threads 0 screencast-$DATE.m4v
+  
   rm -f screencast.oga screencast.ogv screencast.yuv
   echo "FIN"
   exit 1
