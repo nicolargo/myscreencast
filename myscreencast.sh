@@ -3,67 +3,67 @@
 # MyScreenCast
 #
 # Un simple screencast utilisant GStreamer
+#
 # Necessite:
-# * gstreamer
-# * istanbul
-# * oggvideotools
-# * ffmpeg
+# * gstreamer avec les plugins good, bad et ugly
+# * istanbul (pour plugin gstreamer istximagesrc)
 #
 # Auteur: Nicolas Hennion aka Nicolargo
 # GPL v3
 # 
-VERSION="0.3"
+VERSION="0.4"
 
-### Variables
-WEBCAM="/dev/video0"
-OUTPUTHEIGHT=720
-OUTPUTFPS=10
-###
+### Variables à ajuster selon votre configuration
+WEBCAMDEVICE="/dev/video1"
+WEBCAMHEIGHT="240"
+AUDIOAMPLI="1"
+OUTPUTHEIGHT="720"
+OUTPUTFPS="10"
+### Fin des variables à ajuster
 
 DATE=`date +%Y%m%d%H%M%S`
 SOURCEWIDHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\1/p'`
 SOURCEHEIGHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\2/p'`
 OUTPUTWIDTH=$(echo "$SOURCEWIDHT * $OUTPUTHEIGHT / $SOURCEHEIGHT" | bc)
+THEORAENC="theoraenc"
+VORBISENC="vorbisenc"
+H264ENC="x264enc pass=4 quantizer=23 threads=0"
+AACENC="faac tns=true"
 
 encode() {
   echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.ogg"
-  #gst-launch filesrc location=screencast.yuv ! videoparse format=3 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 ! ffmpegcolorspace ! theoraenc ! oggmux ! filesink location=screencast.ogv 2>&1 >>/dev/null
-  #oggJoin screencast-$DATE.ogg screencast.ogv screencast.oga
-  gst-launch oggmux name=mux ! filesink location=screencast.ogg \
+  gst-launch oggmux name=mux ! filesink location=screencast-$DATE.ogg \
 	filesrc location=screencast.yuv \
 	! videoparse format=3 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
-	! queue ! ffmpegcolorspace ! theoraenc ! queue ! mux. \
-	filesrc location=screencast.oga \
+	! queue ! ffmpegcolorspace ! $THEORAENC ! queue ! mux. \
+	filesrc location=screencast.wav \
 	! decodebin \
-	! queue ! audioconvert ! vorbisenc ! queue ! mux.
+	! queue ! audioconvert ! $VORBISENC ! queue ! mux. 2>&1 >>/dev/null
 
 
   echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.mp4"
-  # Quand x264 supportera conteneur mp4, encoder à partir de yuv avec x264
-  #ffmpeg -i screencast-$DATE.ogg -vcodec libx264 -vpre hq -crf 20 -acodec aac -f mp4 -threads 0 screencast-$DATE.m4v
-  gst-launch ffmux_mp4 name=mux ! filesink location=screencast.mp4 \
+  gst-launch ffmux_mp4 name=mux ! filesink location=screencast-$DATE.mp4 \
 	filesrc location=screencast.yuv \
 	! videoparse format=3 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
-	! queue ! ffmpegcolorspace ! x264enc ! queue ! mux. \
-	filesrc location=screencast.oga \
+	! queue ! ffmpegcolorspace ! $H264ENC ! queue ! mux. \
+	filesrc location=screencast.wav \
 	! decodebin \
-	! queue ! audioconvert ! faac ! queue ! mux.
+	! queue ! audioconvert ! $AACENC ! queue ! mux. 2>&1 >>/dev/null
   
-  rm -f screencast.oga screencast.yuv
-  echo "FIN"
+  rm -f screencast.wav screencast.yuv
+  echo "FIN DE LA CAPTURE"
   exit 1
 }
 
-echo "WEBCAM ON"
-gst-launch v4l2src device=$WEBCAM ! ffmpegcolorspace ! autovideosink 2>&1 >>/dev/null &
-
-echo "AUDIO ON"
+echo "WEBCAM: ON"
+gst-launch v4l2src device=$WEBCAMDEVICE ! videoscale ! video/x-raw-yuv,height=$WEBCAMHEIGHT ! ffmpegcolorspace ! autovideosink 2>&1 >>/dev/null &
 
 echo "CAPTURE START IN 3 SECONDS"
 sleep 3
 
-echo "CAPTURE EN COURS (CTRL-C pour arreter)"
 trap encode 1 2 3 6
-gst-launch gconfaudiosrc name=audiosource ! audioconvert ! vorbisenc ! oggmux ! filesink location=screencast.oga &
+echo "AUDIO: ON"
+echo "CAPTURE EN COURS (CTRL-C pour arreter)"
+gst-launch gconfaudiosrc name=audiosource ! audioconvert ! audioamplify amplification=$AUDIOAMPLI ! wavenc ! filesink location=screencast.wav 2>&1 >>/dev/null &
 gst-launch istximagesrc name=videosource use-damage=false ! video/x-raw-rgb,framerate=$OUTPUTFPS/1 ! videorate ! ffmpegcolorspace ! videoscale method=1 ! video/x-raw-yuv,width=$OUTPUTWIDTH,height=$OUTPUTHEIGHT,framerate=$OUTPUTFPS/1 ! filesink location=screencast.yuv 2>&1 >>/dev/null
 
