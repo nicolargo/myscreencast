@@ -32,19 +32,19 @@ H264ENC="x264enc pass=4 quantizer=23 threads=0"
 AACENC="faac tns=true"
 
 encode() {
-  echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.ogg"
+  echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.ogv"
   gst-launch filesrc location=screencast.avi ! decodebin name="decode" \
     decode. ! videoparse format=1 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
 	! queue ! ffmpegcolorspace ! $THEORAENC ! queue ! \
-    oggmux name=mux ! filesink location=screencast-$DATE.ogg \
-    decode. ! queue ! audioconvert ! $VORBISENC ! queue ! mux.
+    oggmux name=mux ! filesink location=screencast-$DATE.ogv \
+    decode. ! queue ! audioconvert ! $VORBISENC ! queue ! mux. 2>&1 >>/dev/null
 
-  echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.mp4"
+  echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.m4v"
   gst-launch filesrc location=screencast.avi ! decodebin name="decode" \
     decode. ! videoparse format=1 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
     ! queue ! ffmpegcolorspace ! $H264ENC ! queue ! \
-    ffmux_mp4 name=mux ! filesink location=screencast-$DATE.mp4 \
-    decode. ! queue ! audioconvert ! $AACENC ! queue ! mux.
+    ffmux_mp4 name=mux ! filesink location=screencast-$DATE.m4v \
+    decode. ! queue ! audioconvert ! $AACENC ! queue ! mux. 2>&1 >>/dev/null
   
   rm -f screencast.avi
   echo "FIN DE LA CAPTURE"
@@ -64,5 +64,5 @@ gst-launch avimux name=mux ! filesink location=screencast.avi \
 	$AUDIODEVICE ! audioconvert ! queue ! mux. \
 	istximagesrc name=videosource use-damage=false ! video/x-raw-rgb,framerate=$OUTPUTFPS/1 \
 	! ffmpegcolorspace ! queue ! videorate ! ffmpegcolorspace ! videoscale method=1 \
-	! video/x-raw-yuv,width=$OUTPUTWIDTH,height=$OUTPUTHEIGHT,framerate=$OUTPUTFPS/1 ! mux.
+	! video/x-raw-yuv,width=$OUTPUTWIDTH,height=$OUTPUTHEIGHT,framerate=$OUTPUTFPS/1 ! mux. 2>&1 >>/dev/null
 	
