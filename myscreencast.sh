@@ -9,16 +9,18 @@
 # * istanbul (pour plugin gstreamer istximagesrc)
 # * key-mon (pour affichage des touches/souris)
 #
+# ===
 # Installation des pre-requis:
 # sudo aptitude install istanbul `aptitude -w 2000 search gstreamer | cut -b5-60 | xargs -eol`
 # wget -q http://key-mon.googlecode.com/files/keymon_1.2.2_all.deb
 # sudo dpkg -i keymon_1.2.2_all.deb
 # rm keymon_1.2.2_all.deb
+# ===
 #
 # Auteur: Nicolas Hennion aka Nicolargo
 # GPL v3
 # 
-VERSION="0.8"
+VERSION="0.9"
 
 ### Variables à ajuster selon votre configuration
 AUDIODEVICE="alsasrc"
@@ -46,35 +48,46 @@ THEORAENC="theoraenc"
 VORBISENC="vorbisenc"
 H264ENC="x264enc pass=4 quantizer=23 threads=0"
 AACENC="faac tns=true"
+VP8ENC="vp8enc quality=7 speed=2"
 
 encode() {
 
  while true
  do
-  echo -n "Encodage en (O)GV ou en (H).264 ? "
+  echo -n "Encodage en (O)GV, (H).264 ou (W)ebM ? "
   read answer
 
   case $answer in
      O|o)
        echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.ogv"
-       gst-launch filesrc location=screencast.avi ! decodebin name="decode" \
+       gst-launch -t filesrc location=screencast.avi ! progressreport ! decodebin name="decode" \
          decode. ! videoparse format=1 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
 	     ! queue ! ffmpegcolorspace ! $THEORAENC ! queue ! \
          oggmux name=mux ! filesink location=screencast-$DATE.ogv \
-         decode. ! queue ! audioconvert ! $VORBISENC ! queue ! mux. 2>&1 >>/dev/null
+         decode. ! queue ! audioconvert ! $VORBISENC ! queue ! mux.
          break
           ;;
      H|h)
        echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.m4v"
-       gst-launch filesrc location=screencast.avi ! decodebin name="decode" \
+       gst-launch -t filesrc location=screencast.avi ! progressreport ! decodebin name="decode" \
          decode. ! videoparse format=1 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
          ! queue ! ffmpegcolorspace ! $H264ENC ! queue ! \
          ffmux_mp4 name=mux ! filesink location=screencast-$DATE.m4v \
-         decode. ! queue ! audioconvert ! $AACENC ! queue ! mux. 2>&1 >>/dev/null
+         decode. ! queue ! audioconvert ! $AACENC ! queue ! mux.
+         break
+          ;;
+     W|w)
+       echo "ENCODAGE VP8/VORBIS EN COURS: screencast-$DATE.webm"
+	gst-launch -t filesrc location=screencast.avi ! progressreport \
+	  ! decodebin name=decoder decoder. \
+	  ! queue ! audioconvert ! $VORBISENC \
+	  ! queue ! webmmux name=mux decoder. \
+	  ! queue ! ffmpegcolorspace ! $VP8ENC \
+	  ! queue ! mux. mux. ! queue ! filesink location=screencast-$DATE.webm
          break
           ;;
         *)
-         echo "Saisir H ou O..."
+         echo "Saisir une réponse valide..."
           ;;
   esac
  done
