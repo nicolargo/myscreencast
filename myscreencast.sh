@@ -20,7 +20,7 @@
 # Auteur: Nicolas Hennion aka Nicolargo
 # GPL v3
 # 
-VERSION="0.9"
+VERSION="0.10"
 
 ### Variables à ajuster selon votre configuration
 AUDIODEVICE="alsasrc"
@@ -30,13 +30,21 @@ OUTPUTHEIGHT="720"
 OUTPUTFPS="10"
 ### Fin des variables à ajuster
 
+### Paramètres d'encodage (voir la documentation GStreamer
+THEORAENC="theoraenc"
+VORBISENC="vorbisenc"
+H264ENC="x264enc pass=4 quantizer=23 threads=0"
+AACENC="faac tns=true"
+VP8ENC="vp8enc quality=7 speed=2"
+### Fin des paramètres d'encodage
+
 WEBCAMTAG="FALSE"
 KEYMONTAG="FALSE"
 while getopts "wk" option
 do
 case $option in
-w)	WEBCAMTAG="TRUE" ;;
-k)	KEYMONTAG="TRUE" ;;
+  w)	WEBCAMTAG="TRUE" ;;
+  k)	KEYMONTAG="TRUE" ;;
 esac
 done
 
@@ -44,57 +52,67 @@ DATE=`date +%Y%m%d%H%M%S`
 SOURCEWIDHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\1/p'`
 SOURCEHEIGHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\2/p'`
 OUTPUTWIDTH=$(echo "$SOURCEWIDHT * $OUTPUTHEIGHT / $SOURCEHEIGHT" | bc)
-THEORAENC="theoraenc"
-VORBISENC="vorbisenc"
-H264ENC="x264enc pass=4 quantizer=23 threads=0"
-AACENC="faac tns=true"
-VP8ENC="vp8enc quality=7 speed=2"
 
 encode() {
 
  while true
  do
-  echo -n "Encodage en (O)GV, (H).264 ou (W)ebM ? "
+  echo -n "Encodage en (O)GV, (H).264 ou (W)ebM / (Q)uitter sans encoder ? "
   read answer
 
+  ENCODETAG="TRUE"
   case $answer in
      O|o)
-       echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.ogv"
-       gst-launch -t filesrc location=screencast.avi ! progressreport ! decodebin name="decode" \
-         decode. ! videoparse format=1 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
-	     ! queue ! ffmpegcolorspace ! $THEORAENC ! queue ! \
-         oggmux name=mux ! filesink location=screencast-$DATE.ogv \
-         decode. ! queue ! audioconvert ! $VORBISENC ! queue ! mux.
-         break
+		 EXTENSION="ogv"       
+       MUXER="oggmux"
+       VIDEOENC=$THEORAENC
+       AUDIOENC=$VORBISENC
+       echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.$EXTENSION"
+       break
           ;;
      H|h)
-       echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.m4v"
-       gst-launch -t filesrc location=screencast.avi ! progressreport ! decodebin name="decode" \
-         decode. ! videoparse format=1 width=$OUTPUTWIDTH height=$OUTPUTHEIGHT framerate=$OUTPUTFPS/1 \
-         ! queue ! ffmpegcolorspace ! $H264ENC ! queue ! \
-         ffmux_mp4 name=mux ! filesink location=screencast-$DATE.m4v \
-         decode. ! queue ! audioconvert ! $AACENC ! queue ! mux.
-         break
+		 EXTENSION="m4v"       
+       MUXER="ffmux_mp4"
+       VIDEOENC=$H264ENC
+       AUDIOENC=$AACENC 
+       echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.$EXTENSION"
+       break
           ;;
      W|w)
-       echo "ENCODAGE VP8/VORBIS EN COURS: screencast-$DATE.webm"
-	gst-launch -t filesrc location=screencast.avi ! progressreport \
-	  ! decodebin name=decoder decoder. \
-	  ! queue ! audioconvert ! $VORBISENC \
-	  ! queue ! webmmux name=mux decoder. \
-	  ! queue ! ffmpegcolorspace ! $VP8ENC \
-	  ! queue ! mux. mux. ! queue ! filesink location=screencast-$DATE.webm
+		 EXTENSION="webm"       
+       MUXER="webmmux"
+       VIDEOENC=$VP8ENC
+       AUDIOENC=$VORBISENC 
+       echo "ENCODAGE VP8/VORBIS EN COURS: screencast-$DATE.$EXTENSION"
          break
           ;;
-        *)
+     Q|q)
+     		ENCODETAG="FALSE"
+     		EXTENSION="avi"
+     		echo "Copie du fichier source vers screencast-$DATE.$EXTENSION"     		     		
+     		break
+     		 ;;
+     *)
          echo "Saisir une réponse valide..."
           ;;
   esac
  done
  
-  rm -f screencast.avi
-  echo "FIN DE LA CAPTURE"
-  exit 1
+ if [ "$ENCODETAG" = "TRUE" ]
+ then
+		gst-launch -t filesrc location=screencast.avi ! progressreport \
+	  		! decodebin name="decoder" \
+	  		decoder. ! queue ! audioconvert ! $AUDIOENC \
+	  		! queue ! $MUXER name=mux \
+	  		decoder. ! queue ! ffmpegcolorspace ! $VIDEOENC \
+	  		! queue ! mux. mux. ! queue ! filesink location=screencast-$DATE.$EXTENSION
+	  	rm -f screencast.avi
+ else
+  		mv screencast.avi screencast-$DATE.avi
+ fi
+ 
+ echo "FIN DE LA CAPTURE"
+ exit 1
 }
 
 if [ "$WEBCAMTAG" = "TRUE" ]
