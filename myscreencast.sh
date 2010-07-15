@@ -30,6 +30,10 @@ OUTPUTHEIGHT="720"
 OUTPUTFPS="10"
 ### Fin des variables à ajuster
 
+### Paramètres de capture (voir la documentation GStreamer
+CAPTURE="istximagesrc name=videosource use-damage=false do-timestamp=true"
+### Fin des paramètres de capture
+
 ### Paramètres d'encodage (voir la documentation GStreamer
 THEORAENC="theoraenc"
 VORBISENC="vorbisenc"
@@ -139,7 +143,7 @@ echo "AUDIO: ON"
 echo "CAPTURE EN COURS (CTRL-C pour arreter)"
 gst-launch avimux name=mux ! filesink location=screencast.avi \
 	$AUDIODEVICE ! audioconvert noise-shaping=3 ! queue ! mux. \
-	istximagesrc name=videosource use-damage=false ! video/x-raw-rgb,framerate=$OUTPUTFPS/1 \
+	$CAPTURE ! video/x-raw-rgb,framerate=$OUTPUTFPS/1 \
 	! ffmpegcolorspace ! queue ! videorate ! ffmpegcolorspace ! videoscale method=1 \
 	! video/x-raw-yuv,width=$OUTPUTWIDTH,height=$OUTPUTHEIGHT,framerate=$OUTPUTFPS/1 ! mux. 2>&1 >>/dev/null
 	
