@@ -42,25 +42,35 @@ AACENC="faac tns=true"
 VP8ENC="vp8enc quality=7 speed=2"
 ### Fin des paramètres d'encodage
 
-WEBCAMTAG="FALSE"
-KEYMONTAG="FALSE"
-OVERLAY=""
-while getopts "wko:" option
-do
-	case $option in
-	  w)	WEBCAMTAG="TRUE" ;;
-	  k)	KEYMONTAG="TRUE" ;;
-	  o)    shift; OVERLAY="$1" ;;
-	esac
-done
+# Function
+##########
 
-DATE=`date +%Y%m%d%H%M%S`
-SOURCEWIDHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\1/p'`
-SOURCEHEIGHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\2/p'`
-OUTPUTWIDTH=$(echo "$SOURCEWIDHT * $OUTPUTHEIGHT / $SOURCEHEIGHT" | bc)
+# Check GStreamer plugins
+checkgst() {
+	# Error
+	for PLUGIN in istximagesrc
+	do
+		gst-inspect $PLUGIN 2>&1 > /dev/null
+		if [ "$?" -ne "0" ]; then 
+			echo "[ERROR] Installer le plugin gstreamer $PLUGIN";
+			exit 1 
+		fi	
+	done
 
+	# Warning
+	for PLUGIN in theoraenc vorbisenc x264enc faac vp8enc cairotextoverlay
+	do
+		gst-inspect $PLUGIN 2>&1 > /dev/null
+		if [ "$?" -ne "0" ]; then 
+			echo "[WARNING] Installer le plugin gstreamer $PLUGIN"; 
+		fi	
+	done
+
+	return 0
+}
+
+# Encodage de la video RAW
 encode() {
- 
  echo
  echo "Fin de la capture"
 
@@ -127,6 +137,28 @@ encode() {
  exit 0
 }
 
+# Main program
+##############
+
+WEBCAMTAG="FALSE"
+KEYMONTAG="FALSE"
+OVERLAY=""
+while getopts "wko:" option
+do
+	case $option in
+	  w)	WEBCAMTAG="TRUE" ;;
+	  k)	KEYMONTAG="TRUE" ;;
+	  o)    shift; OVERLAY="$1" ;;
+	esac
+done
+
+DATE=`date +%Y%m%d%H%M%S`
+SOURCEWIDHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\1/p'`
+SOURCEHEIGHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\2/p'`
+OUTPUTWIDTH=$(echo "$SOURCEWIDHT * $OUTPUTHEIGHT / $SOURCEHEIGHT" | bc)
+
+checkgst
+
 if [ "$WEBCAMTAG" = "TRUE" ]
 then
   echo "WEBCAM: ON"
@@ -152,13 +184,13 @@ else
   PIPELINE_OVERLAY=""
 fi
 
-
 echo "CAPTURE START IN 3 SECONDS"
 sleep 3
 
 trap encode 1 2 3 6
 echo "AUDIO: ON"
 echo "CAPTURE EN COURS (CTRL-C pour arreter)"
+
 gst-launch avimux name=mux ! filesink location=screencast.avi \
 	$AUDIODEVICE ! audioconvert noise-shaping=3 ! queue ! mux. \
 	$CAPTURE ! video/x-raw-rgb,framerate=$OUTPUTFPS/1 \
