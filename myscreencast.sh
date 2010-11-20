@@ -20,7 +20,7 @@
 # Auteur: Nicolas Hennion aka Nicolargo
 # GPL v3
 # 
-VERSION="0.10"
+VERSION="0.11"
 
 ### Variables à ajuster selon votre configuration
 AUDIODEVICE="alsasrc"
@@ -44,12 +44,14 @@ VP8ENC="vp8enc quality=7 speed=2"
 
 WEBCAMTAG="FALSE"
 KEYMONTAG="FALSE"
-while getopts "wk" option
+OVERLAY=""
+while getopts "wko:" option
 do
-case $option in
-  w)	WEBCAMTAG="TRUE" ;;
-  k)	KEYMONTAG="TRUE" ;;
-esac
+	case $option in
+	  w)	WEBCAMTAG="TRUE" ;;
+	  k)	KEYMONTAG="TRUE" ;;
+	  o)    shift; OVERLAY="$1" ;;
+	esac
 done
 
 DATE=`date +%Y%m%d%H%M%S`
@@ -58,65 +60,71 @@ SOURCEHEIGHT=`xrandr -q|sed -n 's/.*current[ ]\([0-9]*\) x \([0-9]*\),.*/\2/p'`
 OUTPUTWIDTH=$(echo "$SOURCEWIDHT * $OUTPUTHEIGHT / $SOURCEHEIGHT" | bc)
 
 encode() {
+ 
+ echo
+ echo "Fin de la capture"
 
  while true
  do
-  echo -n "Encodage en (O)GV, (H).264 ou (W)ebM / (Q)uitter sans encoder ? "
+  echo
+  echo -n "Encodage en (O)GV, (H).264, (W)ebM, (R)aw / (Q)uitter sans encoder ? "
   read answer
 
   ENCODETAG="TRUE"
   case $answer in
      O|o)
-		 EXTENSION="ogv"       
-       MUXER="oggmux"
-       VIDEOENC=$THEORAENC
-       AUDIOENC=$VORBISENC
-       echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.$EXTENSION"
-       break
-          ;;
+		EXTENSION="ogv"       
+       		MUXER="oggmux"
+	        VIDEOENC=$THEORAENC
+	        AUDIOENC=$VORBISENC
+	        echo "ENCODAGE THEORA/VORBIS EN COURS: screencast-$DATE.$EXTENSION"
+          	;;
      H|h)
-		 EXTENSION="m4v"       
-       MUXER="ffmux_mp4"
-       VIDEOENC=$H264ENC
-       AUDIOENC=$AACENC 
-       echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.$EXTENSION"
-       break
-          ;;
+		EXTENSION="m4v"       
+	        MUXER="ffmux_mp4"
+	        VIDEOENC=$H264ENC
+	        AUDIOENC=$AACENC 
+	        echo "ENCODAGE H.264/AAC EN COURS: screencast-$DATE.$EXTENSION"
+          	;;
      W|w)
-		 EXTENSION="webm"       
-       MUXER="webmmux"
-       VIDEOENC=$VP8ENC
-       AUDIOENC=$VORBISENC 
-       echo "ENCODAGE VP8/VORBIS EN COURS: screencast-$DATE.$EXTENSION"
-         break
-          ;;
-     Q|q)
+		EXTENSION="webm"       
+		MUXER="webmmux"
+ 	        VIDEOENC=$VP8ENC
+	        AUDIOENC=$VORBISENC 
+	        echo "ENCODAGE VP8/VORBIS EN COURS: screencast-$DATE.$EXTENSION"
+	        ;;
+     R|r)
      		ENCODETAG="FALSE"
      		EXTENSION="avi"
-     		echo "Copie du fichier source vers screencast-$DATE.$EXTENSION"     		     		
+     		echo "Copie du fichier source vers screencast-$DATE.$EXTENSION"
+  		cp screencast.avi screencast-$DATE.avi
+     		 ;;
+     Q|q)
+     		ENCODETAG="FALSE"
      		break
      		 ;;
      *)
-         echo "Saisir une réponse valide..."
-          ;;
+         	echo "Saisir une réponse valide..."
+          	;;
   esac
+ 
+	 if [ "$ENCODETAG" = "TRUE" ]
+	 then
+			gst-launch -t filesrc location=screencast.avi ! progressreport \
+		  		! decodebin name="decoder" \
+		  		decoder. ! queue ! audioconvert ! $AUDIOENC \
+		  		! queue ! $MUXER name=mux \
+		  		decoder. ! queue ! ffmpegcolorspace ! $VIDEOENC \
+		  		! queue ! mux. mux. ! queue ! filesink location=screencast-$DATE.$EXTENSION
+	 fi
+
  done
  
- if [ "$ENCODETAG" = "TRUE" ]
- then
-		gst-launch -t filesrc location=screencast.avi ! progressreport \
-	  		! decodebin name="decoder" \
-	  		decoder. ! queue ! audioconvert ! $AUDIOENC \
-	  		! queue ! $MUXER name=mux \
-	  		decoder. ! queue ! ffmpegcolorspace ! $VIDEOENC \
-	  		! queue ! mux. mux. ! queue ! filesink location=screencast-$DATE.$EXTENSION
-	  	rm -f screencast.avi
- else
-  		mv screencast.avi screencast-$DATE.avi
- fi
- 
- echo "FIN DE LA CAPTURE"
- exit 1
+ echo "Fin de l'encodage"
+ rm -f screencast.avi
+ ls -alF screencast-$DATE.*
+
+ exit 0
 }
 
 if [ "$WEBCAMTAG" = "TRUE" ]
@@ -135,6 +143,16 @@ else
   echo "KEYMON: OFF (-k to switch it ON)"
 fi
 
+if [ "$OVERLAY" != "" ]
+then
+  echo "OVERLAY ON: $OVERLAY"
+  PIPELINE_OVERLAY="! cairotextoverlay text=\"$OVERLAY\" shaded-background=true"
+else
+  echo "OVERLAY: OFF (-o <Overlay text> to switch it ON)"
+  PIPELINE_OVERLAY=""
+fi
+
+
 echo "CAPTURE START IN 3 SECONDS"
 sleep 3
 
@@ -144,6 +162,8 @@ echo "CAPTURE EN COURS (CTRL-C pour arreter)"
 gst-launch avimux name=mux ! filesink location=screencast.avi \
 	$AUDIODEVICE ! audioconvert noise-shaping=3 ! queue ! mux. \
 	$CAPTURE ! video/x-raw-rgb,framerate=$OUTPUTFPS/1 \
-	! ffmpegcolorspace ! queue ! videorate ! ffmpegcolorspace ! videoscale method=1 \
-	! video/x-raw-yuv,width=$OUTPUTWIDTH,height=$OUTPUTHEIGHT,framerate=$OUTPUTFPS/1 ! mux. 2>&1 >>/dev/null
+	! ffmpegcolorspace ! queue $PIPELINE_OVERLAY \
+	! videorate ! ffmpegcolorspace ! videoscale method=1 \
+	! video/x-raw-yuv,width=$OUTPUTWIDTH,height=$OUTPUTHEIGHT,framerate=$OUTPUTFPS/1 \
+	! mux. 2>&1 >>/dev/null
 	
