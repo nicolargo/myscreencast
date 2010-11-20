@@ -67,7 +67,7 @@ encode() {
  while true
  do
   echo
-  echo -n "Encodage en (O)GV, (H).264, (W)ebM, (R)aw / (Q)uitter sans encoder ? "
+  echo -n "Encodage en (O)GV, (H).264, (W)ebM, (R)aw / (Q)uitter ? "
   read answer
 
   ENCODETAG="TRUE"
