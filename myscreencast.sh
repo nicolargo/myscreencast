@@ -2,7 +2,7 @@
 #
 # MyScreenCast
 #
-# Un simple screencast utilisant GStreamer
+# Un simple logiciel de screencast utilisant GStreamer
 #
 # Pre-requis:
 # * gstreamer avec les plugins good, bad et ugly
@@ -20,7 +20,7 @@
 # Auteur: Nicolas Hennion aka Nicolargo
 # GPL v3
 # 
-VERSION="0.11"
+VERSION="0.11.1"
 
 ### Variables à ajuster selon votre configuration
 AUDIODEVICE="alsasrc"
@@ -35,7 +35,7 @@ CAPTURE="istximagesrc name=videosource use-damage=false do-timestamp=true"
 ### Fin des paramètres de capture
 
 ### Paramètres d'encodage (voir la documentation GStreamer
-THEORAENC="theoraenc"
+THEORAENC="theoraenc quality=32"
 VORBISENC="vorbisenc"
 H264ENC="x264enc pass=4 quantizer=23 threads=0"
 AACENC="faac tns=true"
@@ -110,7 +110,7 @@ encode() {
  
 	 if [ "$ENCODETAG" = "TRUE" ]
 	 then
-			gst-launch -t filesrc location=screencast.avi ! progressreport \
+			gst-launch filesrc location=screencast.avi ! progressreport update-freq=1 \
 		  		! decodebin name="decoder" \
 		  		decoder. ! queue ! audioconvert ! $AUDIOENC \
 		  		! queue ! $MUXER name=mux \
